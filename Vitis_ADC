@@ -1,0 +1,55 @@
+#include <stdio.h>
+#include "platform.h"
+#include "xil_printf.h"
+#include "xil_io.h"
+
+#include "ADC_Controller_IP.h"
+#include "xparameters.h"
+
+#define ADCBASEADDRESS XPAR_ADC_CONTROLLER_IP_0_S00_AXI_BASEADDR
+#define REG1 ADC_CONTROLLER_IP_S00_AXI_SLV_REG1_OFFSET
+#define REG0 ADC_CONTROLLER_IP_S00_AXI_SLV_REG0_OFFSET
+
+int main()
+{
+    uint32_t DATOS_ADC = 0;
+    uint16_t ADC1 = 0;
+    uint16_t ADC2 = 0;
+    float volt1 = 0.0f;
+    float volt2 = 0.0f;
+
+    init_platform();
+    printf("Iniciando sistema...\n\r");
+
+    // Reset del módulo ADC
+    ADC_CONTROLLER_IP_mWriteReg(ADCBASEADDRESS, REG1, 0);
+    for (int delay = 0; delay < 999; delay++);
+    ADC_CONTROLLER_IP_mWriteReg(ADCBASEADDRESS, REG1, 1);
+    for (int delay = 0; delay < 999; delay++);
+    ADC_CONTROLLER_IP_mWriteReg(ADCBASEADDRESS, REG1, 0);
+
+    while(1)
+    {
+        // Leer registro de 32 bits
+    	DATOS_ADC = ADC_CONTROLLER_IP_mReadReg(ADCBASEADDRESS, REG0);
+
+        // Extraer los dos valores de 12 bits
+    	ADC1 = (DATOS_ADC >> 16) & 0x0FFF;   // Parte alta
+    	ADC2 = (DATOS_ADC >> 0)  & 0x0FFF;   // Parte baja
+
+        // Convertir a voltaje (ADC de 12 bits, Vref = 3.3V)
+        volt1 = 3.3f * ADC1 / 4095;
+        volt2 = 3.3f * ADC2 / 4095;
+
+        // Mostrar datos limpios
+//        printf("ADC1 = %4u (0x%03X)  -> %.3f V   |   ADC2 = %4u (0x%03X)  -> %.3f V\n\r",
+//        		ADC1, ADC1, volt1,
+//				ADC2, ADC2, volt2);
+        printf("Volt1 = %.3f V, Volt2 = %.3f V\r\n", volt1, volt2);
+
+        usleep(10);
+    }
+
+    cleanup_platform();
+    return 0;
+}
