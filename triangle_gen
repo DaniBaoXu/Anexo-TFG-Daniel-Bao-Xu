@@ -1,0 +1,41 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity triangle_gen is
+    Port ( clk : in STD_LOGIC;
+           reset : in STD_LOGIC;
+           en: in std_logic;
+           triangle_out : out STD_LOGIC_VECTOR(15 downto 0));
+end triangle_gen;
+
+architecture Behavioral of triangle_gen is
+    signal counter : integer := 0;
+    signal direction : STD_LOGIC := '1'; -- '1' para incrementar, '0' para decrementar
+    constant MAX_COUNT : integer := 1280 / 32; -- Ajustar para 32 veces la frecuencia
+begin
+    process(clk, reset)
+    begin
+        if reset = '0' then
+            counter <= -MAX_COUNT/MAX_COUNT; -- Iniciar en el valor negativo máximo
+            direction <= '1';
+        elsif rising_edge(clk) then
+            if en = '1' then
+                if direction = '1' then
+                    if counter = MAX_COUNT then
+                        direction <= '0';
+                    else
+                        counter <= counter + 1;
+                    end if;
+                else
+                    if counter = -MAX_COUNT then
+                        direction <= '1';
+                    else
+                        counter <= counter - 1;
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+    triangle_out <= std_logic_vector(to_signed(counter * 32, 16)); -- Ajustar amplitud
+end Behavioral;
