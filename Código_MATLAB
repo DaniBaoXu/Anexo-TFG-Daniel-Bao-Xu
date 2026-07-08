@@ -1,0 +1,96 @@
+clear all;
+close all;
+clc;
+
+%%
+% --- CONFIGURACIÓN ---
+port = "COM4";
+baudrate = 115200;
+N = 20000;
+
+% --- ABRIR PUERTO ---
+s = serialport(port, baudrate);
+configureTerminator(s, "CR/LF");
+s.Timeout = 6;   % aumenta el timeout
+flush(s);
+
+sine = zeros(N,1);
+triangle = zeros(N,1);
+
+disp("Leyendo datos...");
+
+% --- LECTURA ---
+for k = 1:N
+    line = readline(s);
+
+    if isempty(line)
+        fprintf("Línea vacía en k=%d (timeout)\n", k);
+        continue;   % pasa al siguiente ciclo
+    end
+
+    values = sscanf(char(line), '%d,%d');
+
+    if numel(values) < 2
+        fprintf("Línea inválida en k=%d: %s\n", k, line);
+        continue;
+    end
+
+    sine(k) = values(1);
+    triangle(k) = values(2);
+end
+
+% --- CERRAR PUERTO ---
+clear s
+disp("Lectura completada");
+
+Fs = 495049;
+t = linspace(0, 0.05, N);
+
+pwm = zeros(N, 1);
+for k = 1:N
+    if sine(k) >= triangle(k)
+        pwm(k) = 1;
+    else
+        pwm(k) = 0;
+    end
+end
+
+figure;
+
+% --- GRÁFICA INTERIOR 1: EL SENO (Completo) ---
+subplot(4,1,1); % Divide la ventana en 2 filas, 1 columna, posición 1
+plot(t, sine/1280, 'b', 'LineWidth', 1.5);
+grid on;
+title('Señal Senoidal (Vista completa)');
+xlabel('Tiempo (s)');
+ylabel('Amplitud');
+
+% --- GRÁFICA INTERIOR 2: LA TRIANGULAR (Con Zoom) ---
+subplot(4,1,2); % 2 filas, 1 columna, posición 2
+plot(t, triangle/1280, 'r', 'LineWidth', 1);
+grid on;
+title('Señal Triangular (Zoom de Alta Frecuencia)');
+xlabel('Tiempo (s)');
+ylabel('Amplitud');
+xlim([0, 0.001]);
+
+% --- GRÁFICA 3: AMBAS SEÑALES JUNTAS ---
+subplot(4, 1, 3); % 3 filas, 1 columna, posición 3
+plot(t, sine / 1280, 'b', 'LineWidth', 1.5);
+hold on; % Permite superponer la siguiente gráfica
+plot(t, triangle / 1280, 'r', 'LineWidth', 1);
+grid on;
+xlabel('Tiempo (s)'); % El eje X principal va abajo del todo
+ylabel('Amplitud');
+title('Comparativa: Ambas Señales');
+legend('Seno', 'Triangular');
+
+% --- GRÁFICA 4: SEÑAL PWM RESULTANTE ---
+subplot(4, 1, 4); 
+plot(t, pwm, 'm', 'LineWidth', 1.5); % Graficamos en color magenta
+grid on; 
+xlabel('Tiempo (s)'); ylabel('Estado Lógico (0-1)'); 
+title('Señal PWM Generada');
+legend('PWM');
+ylim([-0.2 1.2]);
+xlim([0, 0.01]);
