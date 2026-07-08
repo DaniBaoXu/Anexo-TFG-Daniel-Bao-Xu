@@ -1,0 +1,43 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity div_f_sin is
+    Port ( Clk : in STD_LOGIC;
+           reset : in STD_LOGIC;
+           enable: in std_logic := '0';
+           fin_pulsos_sin : in unsigned(15 downto 0);
+           clk_sin : out STD_LOGIC);
+end div_f_sin;
+
+architecture Behavioral of div_f_sin is
+    
+    signal pulsos : unsigned(11 downto 0);
+    signal new_reloj : std_logic;
+    --constant fin_pulsos_sin : natural := 1953;
+
+begin
+    reloj: process(Clk,reset)
+    begin
+        if reset = '0' then
+            pulsos <= (others => '0');
+        elsif rising_edge(Clk) then
+            if new_reloj = '1' then
+                pulsos <= (others => '0');
+            else
+                pulsos <= pulsos + 1;
+            end if;
+        end if;
+     end process;
+     new_reloj <= '1' when pulsos = fin_pulsos_sin else '0';
+     clk_sin <= new_reloj and enable;
+
+end Behavioral;
