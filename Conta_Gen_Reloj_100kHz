@@ -1,0 +1,47 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity Conta_Gen_Reloj_100kHz is
+
+    Port ( Clk_in : in STD_LOGIC;
+           reset : in STD_LOGIC;
+           Reloj_100kHz : out STD_LOGIC);
+           
+end Conta_Gen_Reloj_100kHz;
+
+architecture Behavioral of Conta_Gen_Reloj_100kHz is
+
+    signal pulsos : unsigned (10 downto 0);
+    signal reloj_100kHz_s : std_logic;   
+    constant fin_pulsos : natural := 1000-1;
+    signal Clk_100kHz : std_logic ;
+
+begin
+
+    reloj: process(clk_in,reset)          
+    begin                              
+        if reset = '1' then            
+            pulsos <= (others => '0');              
+        elsif rising_edge(clk_in) then    
+            if reloj_100kHz_s = '1' then     
+                pulsos <= (others => '0');
+                Clk_100kHz <= not(Clk_100kHz);                  
+            else                       
+                pulsos <= pulsos + 1;
+            end if;                    
+        end if;                        
+    end process;
+    
+    reloj_100kHz_s <= '1' when pulsos = fin_pulsos else '0'; 
+    Reloj_100kHz <= Clk_100kHz;
+    
+end Behavioral;
