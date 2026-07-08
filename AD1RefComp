@@ -1,0 +1,148 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity AD1RefComp is
+  Port (
+    CLK      : in std_logic; -- Reloj de entrada a 100 MHz
+    RST      : in std_logic; -- Señal de reset
+    SDATA1   : in std_logic; -- Datos seriales del ADC 1
+    SDATA2   : in std_logic; -- Datos seriales del ADC 2
+    SCLK     : out std_logic; -- Señal de reloj de salida (20 MHz)
+    nCS      : out std_logic; -- Señal de selección de chip (chip select)
+    DATA1    : out std_logic_vector(11 downto 0); -- Datos paralelos del ADC 1
+    DATA2    : out std_logic_vector(11 downto 0); -- Datos paralelos del ADC 2
+    START    : in std_logic; -- Señal de inicio
+    DONE     : out std_logic -- Señal de finalización
+  );
+end AD1RefComp;
+
+architecture AD1 of AD1RefComp is
+  -- Definición de los estados de la máquina de estados
+  type states is (Idle, PrepCS, ShiftIn, SyncData);
+  signal current_state : states; -- Estado actual
+  signal next_state    : states; -- Próximo estado
+  signal temp1         : std_logic_vector(15 downto 0); -- Registro temporal para los datos del ADC 1
+  signal temp2         : std_logic_vector(15 downto 0); -- Registro temporal para los datos del ADC 2
+  signal clk_div       : std_logic; -- Señal de reloj dividida
+  signal clk_counter   : std_logic_vector(2 downto 0); -- Contador de reloj
+  signal end_counter   : std_logic; -- Señal de fin de contador
+  signal sclk_signal   : std_logic; -- Señal de reloj SCLK
+  signal shiftCounter  : std_logic_vector(3 downto 0) := "0000"; -- Contador de desplazamiento
+  signal enShiftCounter: std_logic; -- Señal de habilitación del contador de desplazamiento
+  signal enParalelLoad : std_logic; -- Señal de habilitación de carga paralela
+
+begin
+  -- Proceso de división de reloj para generar un reloj de 20 MHz a partir de un reloj de entrada de 100 MHz
+  clock_divide : process(RST, CLK)
+  begin
+    if RST = '1' then
+      clk_counter <= "000"; -- Reinicia el contador
+    elsif (CLK = '1' and CLK'event) then
+        if end_counter = '1' then
+            clk_counter <= "000"; -- Reinicia el contador cuando llega al final
+        else
+            clk_counter <= clk_counter + '1'; -- Incrementa el contador
+        end if;
+    end if;
+  end process;
+  
+  -- Proceso para generar la señal SCLK
+  clk_sclk: process(RST, CLK)
+  begin
+    if RST = '1' then
+      sclk_signal <= '1'; -- Reinicia la señal SCLK
+    elsif (CLK = '1' and CLK'event) then
+        if end_counter = '1' then
+            sclk_signal <= not sclk_signal; -- Invierte la señal SCLK cuando el contador llega al final
+        end if;    
+    end if;
+  end process;
+  
+  -- Señal de fin de contador
+  end_counter <= '1' when clk_counter = 2 else '0';
+
+  -- Asignación de la señal de reloj dividida
+  clk_div <= sclk_signal;
+  SCLK <= sclk_signal when current_state = ShiftIn else '1';
+
+  -- Proceso del contador
+  counter : process(clk_div, enParalelLoad, enShiftCounter)
+  begin
+    if (clk_div = '1' and clk_div'event) then
+      if (enShiftCounter = '1') then
+        temp1 <= temp1(14 downto 0) & SDATA1; -- Desplaza los datos del ADC 1
+        temp2 <= temp2(14 downto 0) & SDATA2; -- Desplaza los datos del ADC 2
+        shiftCounter <= shiftCounter + '1'; -- Incrementa el contador de desplazamiento
+      elsif (enParalelLoad = '1') then
+        shiftCounter <= "0000"; -- Reinicia el contador de desplazamiento
+        DATA1 <= temp1(11 downto 0); -- Carga los datos del ADC 1
+        DATA2 <= temp2(11 downto 0); -- Carga los datos del ADC 2
+      end if;
+    end if;
+  end process;
+
+  -- Máquina de estados finita
+  SYNC_PROC: process (clk_div, RST)
+  begin
+    if (clk_div'event and clk_div = '1') then
+      if (RST = '1') then
+        current_state <= Idle; -- Reinicia el estado a Idle
+      else
+        current_state <= next_state; -- Actualiza el estado actual
+      end if;
+    end if;
+  end process;
+
+  -- Decodificación de salida
+  OUTPUT_DECODE: process (current_state)
+  begin
+    if current_state = Idle then
+      enShiftCounter <='0'; -- Deshabilita el contador de desplazamiento
+      DONE <='1'; -- Señal de finalización activa
+      nCS <='1'; -- Desactiva la selección de chip
+      enParalelLoad <= '0'; -- Deshabilita la carga paralela
+    elsif current_state = PrepCS then
+      enShiftCounter <='0'; -- Habilita el contador de desplazamiento
+      DONE <='0'; -- Señal de finalización inactiva
+      nCS <='0'; -- Activa la selección de chip
+      enParalelLoad <= '0'; -- Deshabilita la carga paralela
+    elsif current_state = ShiftIn then
+      enShiftCounter <='1'; -- Habilita el contador de desplazamiento
+      DONE <='0'; -- Señal de finalización inactiva
+      nCS <='0'; -- Activa la selección de chip
+      enParalelLoad <= '0'; -- Deshabilita la carga paralela
+    else
+      enShiftCounter <='0'; -- Deshabilita el contador de desplazamiento
+      DONE <='0'; -- Señal de finalización inactiva
+      nCS <='1'; -- Desactiva la selección de chip
+      enParalelLoad <= '1'; -- Habilita la carga paralela
+    end if;
+  end process;
+
+  -- Decodificación del próximo estado
+  NEXT_STATE_DECODE: process (current_state, START, shiftCounter)
+  begin
+    next_state <= current_state; -- Por defecto, mantiene el estado actual
+    case (current_state) is
+      when Idle =>
+        if START = '1' then
+          next_state <= PrepCS; -- Cambia al estado ShiftIn cuando START está activo
+        end if;
+      when PrepCS =>
+          next_state <= ShiftIn;
+      when ShiftIn =>
+        if shiftCounter = "1111" then
+          next_state <= SyncData; -- Cambia al estado SyncData cuando el contador de desplazamiento llega al final
+        end if;
+      when SyncData =>
+        if START = '0' then
+          next_state <= Idle; -- Cambia al estado Idle cuando START está inactivo
+        end if;
+      when others =>
+        next_state <= Idle; -- Por defecto, cambia al estado Idle
+    end case;
+  end process;
+
+end AD1;
