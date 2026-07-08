@@ -1,0 +1,68 @@
+#include <stdio.h>
+#include "platform.h"
+#include "xil_printf.h"
+#include "xil_io.h"
+#include <stdint.h>
+
+
+#include "xparameters.h"
+#include "Read_signals.h"
+
+#define Reg0_Enable     		READ_SIGNALS_S00_AXI_SLV_REG0_OFFSET
+#define Reg1_SINE       		READ_SIGNALS_S00_AXI_SLV_REG1_OFFSET
+#define Reg2_TRIANGLE   		READ_SIGNALS_S00_AXI_SLV_REG2_OFFSET
+#define Reg3_SENO_TRIANGLE   	READ_SIGNALS_S00_AXI_SLV_REG3_OFFSET
+
+#define signal_baseaddress XPAR_READ_SIGNALS_0_S00_AXI_BASEADDR
+
+#define N_SAMPLES 20000
+
+int16_t sine_buf[N_SAMPLES];
+int16_t triangle_buf[N_SAMPLES];
+
+uint32_t sine_raw;
+uint32_t triangle_raw;
+int sample_idx = 0;
+
+uint16_t reg3_low16  = 1953;
+uint16_t reg3_high16 = 125;
+uint32_t reg3 = 0;
+
+uint16_t reg0_low16  = 1;
+uint16_t reg0_high16 = 100;
+uint32_t reg0 = 0;
+
+
+int main()
+{
+	init_platform();
+
+		reg3 = ((uint32_t)reg3_high16 << 16) | reg3_low16;
+		reg0 = ((uint32_t)reg0_high16 << 16) | reg0_low16;
+
+	    READ_SIGNALS_mWriteReg(signal_baseaddress, Reg0_Enable, 0);
+	    READ_SIGNALS_mWriteReg(signal_baseaddress, Reg0_Enable, reg0);
+	    //READ_SIGNALS_mWriteReg(signal_baseaddress, Reg3_SENO_TRIANGLE, 1);
+	    READ_SIGNALS_mWriteReg(signal_baseaddress, Reg3_SENO_TRIANGLE, reg3);
+
+	    while(1)
+	    {
+			while (sample_idx < N_SAMPLES)
+			{
+				sine_raw = READ_SIGNALS_mReadReg(signal_baseaddress, Reg1_SINE);
+				triangle_raw = READ_SIGNALS_mReadReg(signal_baseaddress, Reg2_TRIANGLE);
+
+				sine_buf[sample_idx] = (int16_t)(sine_raw & 0xFFFF);
+				triangle_buf[sample_idx] = (int16_t)(triangle_raw & 0xFFFF);
+
+				sample_idx++;
+				usleep(2);
+			}
+
+			for (int i = 0; i < N_SAMPLES; i++)
+			{
+				xil_printf("%d,%d\r\n", sine_buf[i], triangle_buf[i]);
+			}
+	    }
+
+}
