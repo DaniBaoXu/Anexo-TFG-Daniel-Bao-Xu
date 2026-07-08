@@ -1,0 +1,91 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity PWM_TM_signal1 is
+    Port ( Clk : in STD_LOGIC;
+           reset : in STD_LOGIC;
+           PWM_in : in STD_LOGIC;
+           DEADTIME_CYCLES: in unsigned (15 downto 0);
+           PWM_outA : out STD_LOGIC;
+           PWM_outB : out STD_LOGIC;
+           PWM_outC : out STD_LOGIC;
+           PWM_outD : out STD_LOGIC);
+end PWM_TM_signal1;
+
+architecture Behavioral of PWM_TM_signal1 is
+
+    signal pwm_prev : std_logic := '0';
+    signal counter  : integer := 0;
+    signal deadtime_active_A : boolean := false;
+    signal deadtime_active_B : boolean := false;
+    --constant DEADTIME_CYCLES : integer := 10; -- ajusta según tu reloj
+    signal temp_a, temp_b : std_logic := '0';
+    
+begin
+    process(clk,reset)
+    begin
+        
+    if reset = '0' then
+        pwm_prev <= '0';
+        counter <= 0;
+        deadtime_active_A <= false;
+        deadtime_active_B <= false;
+        temp_a <= '0';
+        temp_b <= '1';
+    elsif rising_edge(clk) then
+        -- Flanco de subida: comienza ciclo PWM
+        if pwm_prev = '0' and pwm_in = '1' then
+            temp_b <= '0';     -- desactiva out_b
+            counter <= 0;
+            deadtime_active_A <= true;
+            deadtime_active_B <= false;
+--        end if;
+
+    -- Flanco de bajada: termina ciclo PWM
+        elsif pwm_prev = '1' and pwm_in = '0' then
+            temp_a <= '0';     -- desactiva out_a inmediatamente
+            counter <= 0;
+            deadtime_active_A <= false; -- inicia tiempo muerto para out_b
+            deadtime_active_B <= true; -- inicia tiempo muerto para out_b
+        end if;
+          
+        -- Activar out_a tras tiempo muerto
+        if deadtime_active_A then
+            if counter < DEADTIME_CYCLES then
+                counter <= counter + 1;
+            else
+                temp_a <= '1';     -- activa out_a
+                temp_b <= '0';
+                deadtime_active_A <= false;
+            end if;
+          -- Activar out_b tras tiempo muerto
+        elsif deadtime_active_B then
+            if counter < DEADTIME_CYCLES then
+                counter <= counter + 1;
+            else
+                temp_b <= '1'; -- activa out_b
+                temp_a <= '0';
+                deadtime_active_B <= false;
+            end if;
+        end if;
+
+        pwm_prev <= pwm_in;
+    end if;
+    end process;
+
+    PWM_outA <= temp_a;
+    PWM_outB <= temp_b;
+    PWM_outC <= temp_a;
+    PWM_outD <= temp_b;
+    
+
+end Behavioral;
